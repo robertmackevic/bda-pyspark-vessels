@@ -21,11 +21,10 @@ def run(force: bool) -> None:
         with urlopen("https://web.ais.dk/aisdata/aisdk-2024-05-04.zip") as response:
             total_size = int(response.headers.get("content-length", 0))
             progress_bar = tqdm(total=total_size, unit="B", unit_scale=True)
-            block_size = 1024
 
             with open(DATASET_ZIP, "wb") as file:
                 while True:
-                    buffer = response.read(block_size)
+                    buffer = response.read(1024)
                     if not buffer:
                         break
 
