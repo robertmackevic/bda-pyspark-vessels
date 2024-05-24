@@ -1,6 +1,6 @@
 import pyspark.sql.functions as f
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StringType, TimestampType, IntegerType
+from pyspark.sql.types import StringType, IntegerType
 from pyspark.sql.window import Window
 
 from src.distance import haversine_distance
@@ -17,19 +17,21 @@ def run():
         .config("spark.delta.catalog.update.enabled", "false") \
         .getOrCreate()
 
+    # Loading the data, converting to timestamp datatype
     df = spark.read.csv(str(DATASET_CSV), header=True)
     df = df.withColumn("timestamp", f.to_timestamp(f.col("# Timestamp"), "dd/MM/yyyy HH:mm:ss"))
 
+    # Dropping unnecessary columns
     columns_to_keep = ["timestamp", "MMSI", "latitude", "longitude"]
-
     df = df.select(*columns_to_keep)
     df = df.dropna(subset=columns_to_keep)
 
-    df = df.withColumn("timestamp", df["timestamp"].cast(TimestampType())) \
-        .withColumn("MMSI", df["MMSI"].cast(IntegerType())) \
+    # Make sure the other columns have appropriate typing
+    df = df.withColumn("MMSI", df["MMSI"].cast(IntegerType())) \
         .withColumn("latitude", df["latitude"].cast(StringType())) \
         .withColumn("longitude", df["longitude"].cast(StringType()))
 
+    # Find the previous locations of vessels
     windowSpec = Window.partitionBy("MMSI").orderBy("timestamp")
     df = df.withColumn("prev_latitude", f.lag("latitude").over(windowSpec))
     df = df.withColumn("prev_longitude", f.lag("longitude").over(windowSpec))
@@ -42,10 +44,8 @@ def run():
     ))
 
     grouped_df = df.groupBy("MMSI").agg(f.sum("distance").alias("total_distance"))
-
     top_5_mmsi = grouped_df.orderBy(grouped_df["total_distance"].desc()).limit(5)
-
-    print("Top 5 MMSI by Distance Sum:")
+    print("Top 5 Distance Traveled by Vessel (MMSI):")
     top_5_mmsi.show()
 
     spark.stop()
