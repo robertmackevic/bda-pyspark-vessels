@@ -1,13 +1,22 @@
+from argparse import Namespace, ArgumentParser
+
 import pyspark.sql.functions as f
+from folium import Map, PolyLine
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, IntegerType
 from pyspark.sql.window import Window
 
 from src.distance import haversine_distance
-from src.paths import DATASET_CSV
+from src.paths import DATASET_CSV, DATA_DIR
 
 
-def run():
+def parse_args() -> Namespace:
+    parser = ArgumentParser()
+    parser.add_argument("--plot", required=False, action="store_true")
+    return parser.parse_args()
+
+
+def run(plot: bool) -> None:
     spark = SparkSession.builder \
         .appName("PySpark Vessels") \
         .config("spark.driver.memory", "12g") \
@@ -37,7 +46,7 @@ def run():
     df = df.withColumn("prev_longitude", f.lag("longitude").over(windowSpec))
     df = df.dropna(subset=["prev_latitude", "prev_longitude"])
 
-    df = df.filter((df["prev_latitude"] != df["latitude"]) & (df["prev_longitude"] != df["longitude"]))
+    df = df.filter((df["prev_latitude"] != df["latitude"]) | (df["prev_longitude"] != df["longitude"]))
 
     df = df.withColumn("distance", haversine_distance(
         f.col("prev_latitude"), f.col("prev_longitude"), f.col("latitude"), f.col("longitude")
@@ -48,8 +57,21 @@ def run():
     print("Top 5 Distance Traveled by Vessel (MMSI):")
     top_5_mmsi.show()
 
+    # Plot the journey of a vessel onto a map
+    # The map is saved in data/map.html
+    if plot:
+        first_mmsi = top_5_mmsi.select("MMSI").first()
+        first_mmsi = first_mmsi["MMSI"]
+        first_mmsi_df = df.where(df["MMSI"] == first_mmsi)
+        coordinates = first_mmsi_df.select("latitude", "longitude").collect()
+
+        _map = Map(location=[float(coordinates[0]["latitude"]), float(coordinates[0]["longitude"])], zoom_start=11)
+        trail_coordinates = [(float(coord["latitude"]), float(coord["longitude"])) for coord in coordinates]
+        PolyLine(trail_coordinates, tooltip="Coast").add_to(_map)
+        _map.save(DATA_DIR / "map.html")
+
     spark.stop()
 
 
 if __name__ == "__main__":
-    run()
+    run(**vars(parse_args()))

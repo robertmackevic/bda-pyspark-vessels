@@ -3,10 +3,7 @@ from pyspark.sql.column import Column
 
 
 def haversine_distance(lat1: Column, lon1: Column, lat2: Column, lon2: Column) -> Column:
-    lat1_rad = f.radians(lat1)
-    lon1_rad = f.radians(lon1)
-    lat2_rad = f.radians(lat2)
-    lon2_rad = f.radians(lon2)
+    lat1_rad, lon1_rad, lat2_rad, lon2_rad = map(f.radians, [lat1, lon1, lat2, lon2])
 
     delta_lon = lon2_rad - lon1_rad
     delta_lat = lat2_rad - lat1_rad
