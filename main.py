@@ -1,5 +1,3 @@
-from argparse import Namespace, ArgumentParser
-
 import pyspark.sql.functions as f
 from folium import Map, PolyLine
 from pyspark.sql import SparkSession
@@ -10,13 +8,7 @@ from src.distance import haversine_distance
 from src.paths import DATASET_CSV, DATA_DIR
 
 
-def parse_args() -> Namespace:
-    parser = ArgumentParser()
-    parser.add_argument("--plot", required=False, action="store_true")
-    return parser.parse_args()
-
-
-def run(plot: bool) -> None:
+def run() -> None:
     spark = SparkSession.builder \
         .appName("PySpark Vessels") \
         .config("spark.driver.memory", "12g") \
@@ -59,19 +51,18 @@ def run(plot: bool) -> None:
 
     # Plot the journey of a vessel onto a map
     # The map is saved in data/map.html
-    if plot:
-        first_mmsi = top_5_mmsi.select("MMSI").first()
-        first_mmsi = first_mmsi["MMSI"]
-        first_mmsi_df = df.where(df["MMSI"] == first_mmsi)
-        coordinates = first_mmsi_df.select("latitude", "longitude").collect()
+    first_mmsi = top_5_mmsi.select("MMSI").first()
+    first_mmsi = first_mmsi["MMSI"]
+    first_mmsi_df = df.where(df["MMSI"] == first_mmsi)
+    coordinates = first_mmsi_df.select("latitude", "longitude").collect()
 
-        _map = Map(location=[float(coordinates[0]["latitude"]), float(coordinates[0]["longitude"])], zoom_start=11)
-        trail_coordinates = [(float(coord["latitude"]), float(coord["longitude"])) for coord in coordinates]
-        PolyLine(trail_coordinates, tooltip="Coast").add_to(_map)
-        _map.save(DATA_DIR / "map.html")
+    _map = Map(location=[float(coordinates[0]["latitude"]), float(coordinates[0]["longitude"])], zoom_start=11)
+    trail_coordinates = [(float(coord["latitude"]), float(coord["longitude"])) for coord in coordinates]
+    PolyLine(trail_coordinates, tooltip="Coast").add_to(_map)
+    _map.save(DATA_DIR / "map.html")
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    run(**vars(parse_args()))
+    run()
